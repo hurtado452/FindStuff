@@ -1,10 +1,10 @@
 # FindStuff
 
-##Description:
+##Description
 When people search for products using #askFindStuff. Bot will reply with nearby stores.
 
-##Usage:
+##Usage
 npm start
 
-##Notes:
+###Notes
 A build off from my earlier project findmecool.tech
