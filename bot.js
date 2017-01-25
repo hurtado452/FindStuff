@@ -107,5 +107,5 @@ var replyToTweet = function(tweetUserID){
     });
 }
 
-extractKeyWords();
-//searchTweet();
+//extractKeyWords();
+searchTweet();
