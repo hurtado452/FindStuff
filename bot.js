@@ -8,18 +8,15 @@ var config_watson = require('./watsonConfig.js');
 var alchemy_language = watson.alchemy_language(config_watson);
 
 //YELLOW PAGES API
-var YellowPages = require('node-yp');
-var config_yp = require('./ypConfig.js');
-var yp = new YellowPages(config_yp);
-
+var YellowPages = require('./ypAPI.js');
 
 var searchTweet = function(){
     var params = {
             q: '#askFindStuff4',
             result_type: 'recent',
-            geocode: '43.5528332,-79.7156933,15mi',
+            geocode: '43.5528332,-79.7156933,5mi', //searches around specific area
             lang: 'en',
-            count: '5'
+            count: '5' //max 5
     }
     //finds latest tweets based on query
     Twitter.get('search/tweets',params,function(err,data, response){
@@ -34,8 +31,7 @@ var searchTweet = function(){
     });
 }
 
-var extractKeyWords = function(){
-    
+var extractKeyWords = function(data){
     numTweets = Object.keys(data.statuses).length;
 
     //console.log(numTweets);
@@ -43,7 +39,7 @@ var extractKeyWords = function(){
     var tweetID = data.statuses[0].id_str;
     var message = data.statuses[0].text;
     var tweetUserID = data.statuses[0].user.screen_name;
-    var location = null;
+    var location = '43.5528332,-79.7156933';
     
     //save location if possible
     if(data.statuses[0].place != null){
@@ -55,47 +51,75 @@ var extractKeyWords = function(){
         location = coordinates;
     }
     else{
-        location = 'Mississauga'; //default to this location
+        location = '43.5528332,-79.7156933'; //default to this location
     }
 
     console.log('@'+ tweetUserID+ " tweeted: "+ message);
     console.log('At Location: ' + location);
 
     //extract keywords
-   var params = {
+
+    var params = {
         extract: 'keywords',
-        text: 'Where can I find flower arrangements for weddings?',
+        text: message,
         showSourceText: 1
     }
-
-    var numOfKeyWords = 0;
-
+   
     alchemy_language.combined(params,function(err,response){
+        var numOfKeyWords = 0;
+        var topKeyWord = [];
         if(!err){
             numOfKeyWords = Object.keys(response.keywords).length;
-            
-        }
+            topKeyWord = response.keywords;
+            //console.log(numOfKeyWords, topKeyWord);
+            var key_text = '';
+            var max_relevance = -0.01;    
+            for(var i=0;i<numOfKeyWords;i++){
+                temp = Number(topKeyWord[i].relevance);
+                if(temp > max_relevance){
+                    max_relevance = temp;
+                    key_text = topKeyWord[i].text;
+                }
+            }
+
+            //call YP api
+            YellowPages(key_text,location,function(listings,stores){
+                replyToTweet(tweetUserID,listings,stores,key_text);
+                
+            });
+       }
         else{
             console.log("Extracting keywords failed: ",err);
-        }
+        }    
+        
     });
-
-
-    /*var parameters ={
-        what: ''
-    }
-    //get Yellow Pages businesses nearby
-    yp.search(,parameters,function(err,response){
-
-    });*/
-    //replyToTweet(tweetUserID);
+    
+    
 
 }
 
-var replyToTweet = function(tweetUserID){
-    var replyObj = {
-        status: "yo @"+tweetUserID
+var replyToTweet = function(tweetUserID, listings, stores, key_text){
+
+    var replyMsg = tweetUserID + ' the nearest places for ' + key_text + ' are: ';
+    lengthOfTweet = replyMsg.length;
+    numOfStores = Object.keys(stores).length;
+    var runningCount = 139 - lengthOfTweet; 
+    
+    //handling the max 140 char twitter count. 
+    for (var i=0;i<numOfStores;i++){
+        //console.log(stores[i]);
+        if(stores[i].length < runningCount){
+            replyMsg = replyMsg + stores[i] + ', ';
+            runningCount = 139 - replyMsg.length;
+        }
     }
+    //console.log(replyMsg, numOfStores);
+    replyMsg = replyMsg.slice(0,-2);
+
+    var replyObj = {
+        status: "@"+replyMsg
+    }
+    //console.log(replyObj.status);
     //reply to user
     Twitter.post('statuses/update', replyObj, function(err,replyData,response){
         if (!err){
@@ -107,5 +131,6 @@ var replyToTweet = function(tweetUserID){
     });
 }
 
+//ypCalls();
 //extractKeyWords();
 searchTweet();
